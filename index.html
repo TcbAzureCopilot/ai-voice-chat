@@ -32,8 +32,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .search-toggle:hover{color:#c4b5fd}
 .search-details{margin-top:8px;display:none;font-size:12px;color:#aaa;line-height:1.8}
 .search-details.open{display:block}
-.search-details a{color:#60a5fa;text-decoration:none}
-.search-details a:hover{text-decoration:underline}
 .search-item{padding:6px 0;border-bottom:1px solid #ffffff08}
 .search-item:last-child{border:none}
 .search-item .s-title{color:#60a5fa;font-weight:500}
@@ -62,7 +60,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .modal-btns button{flex:1;padding:10px;border-radius:8px;border:none;font-size:14px;cursor:pointer}
 .btn-save{background:linear-gradient(135deg,#7c3aed,#6366f1);color:#fff}
 .btn-cancel{background:#ffffff10;color:#ccc;border:1px solid #ffffff20!important}
-.radio-group{display:flex;gap:8px;margin-top:4px}
+.radio-group{display:flex;gap:8px;margin-top:4px;flex-wrap:wrap}
 .radio-group label{display:flex;align-items:center;gap:4px;background:#ffffff08;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:13px;color:#ccc;border:1px solid transparent}
 .radio-group input[type=radio]{accent-color:#a78bfa}
 .radio-group label:has(input:checked){border-color:#a78bfa60;color:#a78bfa;background:#a78bfa15}
@@ -81,7 +79,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </style>
 </head>
 <body>
-
 <div class="header">
   <h1>🤖 AI 語音助手</h1>
   <div class="header-btns">
@@ -92,7 +89,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button class="icon-btn" onclick="showSettings()" title="設定">⚙️</button>
   </div>
 </div>
-
 <div class="chat-area" id="chatArea">
   <div class="welcome" id="welcome">
     <div class="emoji">🤖</div>
@@ -108,13 +104,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
   </div>
 </div>
-
 <div class="input-area">
   <button class="mic-btn" id="micBtn" onclick="toggleMic()">🎙️</button>
   <input type="text" id="userInput" placeholder="輸入訊息..." onkeydown="if(event.key==='Enter')sendMessage()">
   <button class="send-btn" onclick="sendMessage()">➤</button>
 </div>
-
 <div class="modal-overlay" id="settingsModal">
   <div class="modal">
     <h2>⚙️ 設定</h2>
@@ -138,9 +132,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="section">
       <div class="section-title">🤖 自訂指令</div>
       <label>關於我（讓 AI 了解你的背景）</label>
-      <textarea id="setAboutMe" placeholder="例如：我是資訊部的工程師，主要用 Python 和 Java，工作在金融業..."></textarea>
+      <textarea id="setAboutMe" placeholder="例如：我是資訊部的工程師，主要用 Python 和 Java..."></textarea>
       <label>回覆風格（你希望 AI 怎麼回答）</label>
-      <textarea id="setStyle" placeholder="例如：用繁體中文、簡潔扼要、有條理、適時用 emoji..."></textarea>
+      <textarea id="setStyle" placeholder="例如：用繁體中文、簡潔扼要、有條理..."></textarea>
     </div>
     <div class="section">
       <div class="section-title">🔍 搜尋設定</div>
@@ -170,40 +164,41 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
   </div>
 </div>
-
 <script>
+/* ===== 工具：清理 Token (修復手機複製的隱藏字元) ===== */
+function cleanToken(t){return (t||'').replace(/[^\x20-\x7E]/g,'').trim()}
+
+/* ===== 工具：帶超時的 fetch (相容舊瀏覽器) ===== */
+function fetchT(url,opts,ms){
+  ms=ms||10000;
+  var c=new AbortController();
+  var t=setTimeout(function(){c.abort()},ms);
+  return fetch(url,Object.assign({},opts,{signal:c.signal})).finally(function(){clearTimeout(t)});
+}
+
 /* ===== 全域變數 ===== */
-const API_URL='https://models.inference.ai.azure.com/chat/completions';
-const SEARCH_KEYWORDS=/最新|新聞|今天|天氣|目前|現在|最近|股價|匯率|即時|消息|報導|熱門|趨勢|誰是|什麼是|怎麼了|發生|latest|news|today|current|weather|price|recent|who is|what is/i;
-const CORS_PROXIES=['https://api.allorigins.win/raw?url=','https://corsproxy.io/?'];
-let chatHistory=[];
-let voiceEnabled=true;
-let speechRate=1.1;
-let isRecording=false;
-let recognition=null;
-let currentController=null;
-let searchMode='auto';
-let allMessages=[];
+var API_URL='https://models.inference.ai.azure.com/chat/completions';
+var SEARCH_KW=/最新|新聞|今天|天氣|目前|現在|最近|股價|匯率|即時|消息|報導|熱門|趨勢|誰是|什麼是|怎麼了|發生|latest|news|today|current|weather|price|recent|who is|what is/i;
+var chatHistory=[],voiceEnabled=true,speechRate=1.1,isRecording=false,recognition=null,currentController=null,searchMode='auto',allMessages=[];
 
 /* ===== 初始化 ===== */
-window.onload=()=>{
+window.onload=function(){
   loadSettings();
   if(!localStorage.getItem('pat_token'))setTimeout(showSettings,500);
   initSpeechRecognition();
-  if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+  if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(function(){});
   updateSearchBtn();
 };
 
-/* ===== 載入設定 ===== */
 function loadSettings(){
   searchMode=localStorage.getItem('search_mode')||'auto';
   voiceEnabled=localStorage.getItem('voice_mode')!=='off';
   speechRate=parseFloat(localStorage.getItem('speech_rate'))||1.1;
-  document.getElementById('voiceToggle').textContent=voiceEnabled?'🔊':'🔇';
-  document.getElementById('voiceToggle').classList.toggle('active',voiceEnabled);
+  var vb=document.getElementById('voiceToggle');
+  if(vb){vb.textContent=voiceEnabled?'🔊':'🔇';vb.classList.toggle('active',voiceEnabled)}
 }
 
-/* ===== 設定視窗 ===== */
+/* ===== 設定 ===== */
 function showSettings(){
   document.getElementById('setToken').value=localStorage.getItem('pat_token')||'';
   document.getElementById('setModel').value=localStorage.getItem('model')||'gpt-4o-mini';
@@ -213,15 +208,15 @@ function showSettings(){
   document.getElementById('setStyle').value=localStorage.getItem('reply_style')||'用繁體中文、簡潔扼要、有條理';
   document.getElementById('setRate').value=localStorage.getItem('speech_rate')||'1.1';
   document.getElementById('rateVal').textContent=document.getElementById('setRate').value;
-  const sm=localStorage.getItem('search_mode')||'auto';
-  document.querySelector(`input[name=searchMode][value=${sm}]`).checked=true;
-  const vm=localStorage.getItem('voice_mode')==='off'?'off':'on';
-  document.querySelector(`input[name=voiceMode][value=${vm}]`).checked=true;
+  var sm=localStorage.getItem('search_mode')||'auto';
+  var sr=document.querySelector('input[name=searchMode][value='+sm+']');if(sr)sr.checked=true;
+  var vm=localStorage.getItem('voice_mode')==='off'?'off':'on';
+  var vr=document.querySelector('input[name=voiceMode][value='+vm+']');if(vr)vr.checked=true;
   document.getElementById('settingsModal').classList.add('show');
 }
 function hideSettings(){document.getElementById('settingsModal').classList.remove('show')}
 function saveSettings(){
-  const t=document.getElementById('setToken').value.trim();
+  var t=cleanToken(document.getElementById('setToken').value);
   if(!t){alert('請輸入 PAT Token！');return}
   localStorage.setItem('pat_token',t);
   localStorage.setItem('model',document.getElementById('setModel').value);
@@ -231,248 +226,214 @@ function saveSettings(){
   localStorage.setItem('search_mode',document.querySelector('input[name=searchMode]:checked').value);
   localStorage.setItem('voice_mode',document.querySelector('input[name=voiceMode]:checked').value);
   localStorage.setItem('speech_rate',document.getElementById('setRate').value);
-  loadSettings();
-  searchMode=localStorage.getItem('search_mode')||'auto';
-  updateSearchBtn();
-  hideSettings();
-  addSystemMsg('✅ 設定已儲存！');
+  loadSettings();searchMode=localStorage.getItem('search_mode')||'auto';updateSearchBtn();
+  hideSettings();addSystemMsg('✅ 設定已儲存！');
 }
 
-/* ===== 搜尋模式切換 ===== */
+/* ===== 搜尋模式 ===== */
 function cycleSearchMode(){
-  const modes=['auto','always','never'];
-  const i=(modes.indexOf(searchMode)+1)%3;
-  searchMode=modes[i];
-  localStorage.setItem('search_mode',searchMode);
-  updateSearchBtn();
-  const labels={auto:'🤖 自動搜尋',always:'🔍 總是搜尋',never:'❌ 不搜尋'};
-  addSystemMsg(`搜尋模式：${labels[searchMode]}`);
+  var modes=['auto','always','never'];
+  searchMode=modes[(modes.indexOf(searchMode)+1)%3];
+  localStorage.setItem('search_mode',searchMode);updateSearchBtn();
+  var lb={auto:'🤖 自動搜尋',always:'🔍 總是搜尋',never:'❌ 不搜尋'};
+  addSystemMsg('搜尋模式：'+lb[searchMode]);
 }
 function updateSearchBtn(){
-  const b=document.getElementById('searchModeBtn');
-  const m={auto:'🔍',always:'🔎',never:'🚫'};
-  b.textContent=m[searchMode]||'🔍';
-  b.classList.toggle('active',searchMode!=='never');
+  var b=document.getElementById('searchModeBtn');
+  var m={auto:'🔍',always:'🔎',never:'🚫'};
+  b.textContent=m[searchMode]||'🔍';b.classList.toggle('active',searchMode!=='never');
 }
 
 /* ===== 語音開關 ===== */
 function toggleVoice(){
-  voiceEnabled=!voiceEnabled;
-  localStorage.setItem('voice_mode',voiceEnabled?'on':'off');
-  const b=document.getElementById('voiceToggle');
-  b.textContent=voiceEnabled?'🔊':'🔇';
-  b.classList.toggle('active',voiceEnabled);
-  if(!voiceEnabled)speechSynthesis.cancel();
+  voiceEnabled=!voiceEnabled;localStorage.setItem('voice_mode',voiceEnabled?'on':'off');
+  var b=document.getElementById('voiceToggle');b.textContent=voiceEnabled?'🔊':'🔇';
+  b.classList.toggle('active',voiceEnabled);if(!voiceEnabled)speechSynthesis.cancel();
 }
 
 /* ===== 新對話 ===== */
 function newChat(){
-  chatHistory=[];allMessages=[];
-  speechSynthesis.cancel();
+  chatHistory=[];allMessages=[];speechSynthesis.cancel();
   if(currentController)currentController.abort();
-  document.getElementById('chatArea').innerHTML=`<div class="welcome" id="welcome"><div class="emoji">🤖</div><h2>AI 語音助手</h2><p>支援語音對話 & 即時網路搜尋</p><div class="presets"><div class="preset-card" onclick="applyPreset('chat')"><div class="p-icon">💬</div><div class="p-name">一般聊天</div></div><div class="preset-card" onclick="applyPreset('search')"><div class="p-icon">🔍</div><div class="p-name">搜尋助手</div></div><div class="preset-card" onclick="applyPreset('code')"><div class="p-icon">💻</div><div class="p-name">程式助手</div></div><div class="preset-card" onclick="applyPreset('write')"><div class="p-icon">📝</div><div class="p-name">寫作助手</div></div><div class="preset-card" onclick="applyPreset('translate')"><div class="p-icon">🌐</div><div class="p-name">翻譯助手</div></div><div class="preset-card" onclick="applyPreset('data')"><div class="p-icon">📊</div><div class="p-name">資料分析</div></div></div></div>`;
+  document.getElementById('chatArea').innerHTML='<div class="welcome" id="welcome"><div class="emoji">🤖</div><h2>AI 語音助手</h2><p>支援語音對話 & 即時網路搜尋</p><div class="presets"><div class="preset-card" onclick="applyPreset(\'chat\')"><div class="p-icon">💬</div><div class="p-name">一般聊天</div></div><div class="preset-card" onclick="applyPreset(\'search\')"><div class="p-icon">🔍</div><div class="p-name">搜尋助手</div></div><div class="preset-card" onclick="applyPreset(\'code\')"><div class="p-icon">💻</div><div class="p-name">程式助手</div></div><div class="preset-card" onclick="applyPreset(\'write\')"><div class="p-icon">📝</div><div class="p-name">寫作助手</div></div><div class="preset-card" onclick="applyPreset(\'translate\')"><div class="p-icon">🌐</div><div class="p-name">翻譯助手</div></div><div class="preset-card" onclick="applyPreset(\'data\')"><div class="p-icon">📊</div><div class="p-name">資料分析</div></div></div></div>';
 }
 
-/* ===== 匯出對話 ===== */
+/* ===== 匯出 ===== */
 function exportChat(){
   if(!allMessages.length){addSystemMsg('目前沒有對話可匯出');return}
-  let md='# AI 語音助手對話紀錄\n> '+new Date().toLocaleString('zh-TW')+'\n\n';
-  allMessages.forEach(m=>{md+=m.role==='user'?`## 👤 你\n${m.content}\n\n`:`## 🤖 AI\n${m.content}\n\n`});
-  const blob=new Blob([md],{type:'text/markdown'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download=`chat-${Date.now()}.md`;
-  a.click();
+  var md='# AI 語音助手對話紀錄\n> '+new Date().toLocaleString('zh-TW')+'\n\n';
+  allMessages.forEach(function(m){md+=m.role==='user'?'## 👤 你\n'+m.content+'\n\n':'## 🤖 AI\n'+m.content+'\n\n'});
+  var blob=new Blob([md],{type:'text/markdown'});var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download='chat-'+Date.now()+'.md';a.click();
   addSystemMsg('📤 對話已匯出');
 }
 
 /* ===== 預設角色 ===== */
 function applyPreset(type){
-  document.getElementById('welcome')?.remove();
-  const presets={
+  var w=document.getElementById('welcome');if(w)w.remove();
+  var p={
     chat:{prompt:'你是一個友善的 AI 助手，請用繁體中文回答，簡潔扼要。',mode:'auto',msg:'💬 一般聊天模式'},
-    search:{prompt:'你是一個新聞搜尋助手。請根據網路搜尋結果提供最新、準確的資訊，並標註來源。',mode:'always',msg:'🔍 搜尋助手模式 — 每次都會搜尋最新資料'},
-    code:{prompt:'你是一個資深程式設計師。請用繁體中文解釋，提供完整可執行的程式碼，使用 markdown code block。支援 Python, JavaScript, Java 等語言。',mode:'auto',msg:'💻 程式助手模式'},
-    write:{prompt:'你是一個專業寫作助手。擅長文章撰寫、校稿、潤稿、文案發想。請用繁體中文回覆，注重文字品質與結構。',mode:'never',msg:'📝 寫作助手模式'},
-    translate:{prompt:'你是一個專業翻譯。使用者輸入任何語言的文字，你自動偵測語言並翻譯成另一種語言（中↔英為主）。提供直譯和意譯兩個版本。',mode:'never',msg:'🌐 翻譯助手模式'},
-    data:{prompt:'你是一個資料分析專家。擅長整理數據、製作表格、分析趨勢。請用繁體中文回覆，善用 markdown 表格呈現資料。',mode:'auto',msg:'📊 資料分析模式'}
-  };
-  const p=presets[type];
-  localStorage.setItem('reply_style',p.prompt);
-  searchMode=p.mode;
-  localStorage.setItem('search_mode',p.mode);
-  updateSearchBtn();
-  chatHistory=[];
-  addSystemMsg(p.msg);
+    search:{prompt:'你是一個新聞搜尋助手。請根據網路搜尋結果提供最新、準確的資訊，並標註來源。',mode:'always',msg:'🔍 搜尋助手模式'},
+    code:{prompt:'你是一個資深程式設計師。請用繁體中文解釋，提供完整可執行的程式碼。',mode:'auto',msg:'💻 程式助手模式'},
+    write:{prompt:'你是一個專業寫作助手。擅長文章撰寫、校稿、潤稿。請用繁體中文回覆。',mode:'never',msg:'📝 寫作助手模式'},
+    translate:{prompt:'你是一個專業翻譯。自動偵測語言並翻譯（中↔英為主）。提供直譯和意譯。',mode:'never',msg:'🌐 翻譯助手模式'},
+    data:{prompt:'你是一個資料分析專家。擅長整理數據、製作表格。請用繁體中文回覆。',mode:'auto',msg:'📊 資料分析模式'}
+  }[type];
+  localStorage.setItem('reply_style',p.prompt);searchMode=p.mode;
+  localStorage.setItem('search_mode',p.mode);updateSearchBtn();chatHistory=[];addSystemMsg(p.msg);
 }
 
 /* ===== 語音辨識 ===== */
 function initSpeechRecognition(){
-  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR)return;
-  recognition=new SR();
-  recognition.lang='zh-TW';
-  recognition.continuous=false;
-  recognition.interimResults=true;
-  recognition.onresult=e=>{
-    let t='';
-    for(let i=e.resultIndex;i<e.results.length;i++)t+=e.results[i][0].transcript;
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR)return;
+  recognition=new SR();recognition.lang='zh-TW';recognition.continuous=false;recognition.interimResults=true;
+  recognition.onresult=function(e){
+    var t='';for(var i=e.resultIndex;i<e.results.length;i++)t+=e.results[i][0].transcript;
     document.getElementById('userInput').value=t;
-    if(e.results[e.results.length-1].isFinal)setTimeout(()=>sendMessage(),300);
+    if(e.results[e.results.length-1].isFinal)setTimeout(sendMessage,300);
   };
-  recognition.onend=()=>{isRecording=false;document.getElementById('micBtn').classList.remove('recording')};
-  recognition.onerror=e=>{isRecording=false;document.getElementById('micBtn').classList.remove('recording');if(e.error==='not-allowed')addSystemMsg('⚠️ 請允許麥克風權限')};
+  recognition.onend=function(){isRecording=false;document.getElementById('micBtn').classList.remove('recording')};
+  recognition.onerror=function(e){isRecording=false;document.getElementById('micBtn').classList.remove('recording');if(e.error==='not-allowed')addSystemMsg('⚠️ 請允許麥克風權限')};
 }
 function toggleMic(){
   if(!recognition){addSystemMsg('⚠️ 你的瀏覽器不支援語音辨識');return}
   if(isRecording){recognition.stop()}else{isRecording=true;document.getElementById('micBtn').classList.add('recording');document.getElementById('userInput').value='';recognition.start()}
 }
 
-/* ===== 網路搜尋（DuckDuckGo via CORS proxy）===== */
+/* ===== 網路搜尋（三重備援） ===== */
 async function webSearch(query){
-  const ddgUrl='https://html.duckduckgo.com/html/?q='+encodeURIComponent(query);
-  for(const proxy of CORS_PROXIES){
-    try{
-      const r=await fetch(proxy+encodeURIComponent(ddgUrl),{signal:AbortSignal.timeout(8000)});
-      if(!r.ok)continue;
-      const html=await r.text();
-      const doc=new DOMParser().parseFromString(html,'text/html');
-      const results=[];
-      doc.querySelectorAll('.result').forEach((el,i)=>{
-        if(i>=5)return;
-        const a=el.querySelector('.result__a');
-        const s=el.querySelector('.result__snippet');
-        if(a)results.push({title:a.textContent.trim(),url:a.href||'',snippet:s?s.textContent.trim():''});
-      });
-      if(results.length)return results;
-    }catch(e){continue}
-  }
+  var results=null;
+  /* 方法1: DuckDuckGo Instant API (原生支援 CORS，不需要 proxy) */
+  try{
+    var apiUrl='https://api.duckduckgo.com/?q='+encodeURIComponent(query)+'&format=json&no_html=1&skip_disambig=1&t=ai-voice-chat';
+    var r=await fetchT(apiUrl,{},8000);
+    if(r.ok){
+      var d=await r.json();
+      var items=[];
+      if(d.Abstract)items.push({title:d.Heading||query,snippet:d.Abstract,src:'即時摘要'});
+      if(d.RelatedTopics)d.RelatedTopics.forEach(function(t){if(t.Text&&items.length<5)items.push({title:t.Text.substring(0,60),snippet:t.Text,src:'即時摘要'})});
+      if(d.Results)d.Results.forEach(function(t){if(t.Text&&items.length<5)items.push({title:t.Text.substring(0,60),snippet:t.Text,src:'即時摘要'})});
+      if(items.length>=1)return items;
+    }
+  }catch(e){}
+  /* 方法2: DuckDuckGo HTML via allorigins /get (JSON wrapper) */
+  try{
+    var ddgUrl='https://html.duckduckgo.com/html/?q='+encodeURIComponent(query);
+    var r2=await fetchT('https://api.allorigins.win/get?url='+encodeURIComponent(ddgUrl),{},10000);
+    if(r2.ok){
+      var j=await r2.json();
+      if(j.contents){
+        var doc=new DOMParser().parseFromString(j.contents,'text/html');
+        results=parseResults(doc);
+        if(results&&results.length)return results;
+      }
+    }
+  }catch(e){}
+  /* 方法3: DuckDuckGo HTML via corsproxy.io */
+  try{
+    var ddgUrl2='https://html.duckduckgo.com/html/?q='+encodeURIComponent(query);
+    var r3=await fetchT('https://corsproxy.io/?'+encodeURIComponent(ddgUrl2),{},10000);
+    if(r3.ok){
+      var html=await r3.text();
+      var doc2=new DOMParser().parseFromString(html,'text/html');
+      results=parseResults(doc2);
+      if(results&&results.length)return results;
+    }
+  }catch(e){}
   return null;
 }
+function parseResults(doc){
+  var results=[];
+  doc.querySelectorAll('.result,.web-result').forEach(function(el){
+    if(results.length>=5)return;
+    var a=el.querySelector('.result__a,a.result__a,.result-link,a[href]');
+    var s=el.querySelector('.result__snippet,.result-snippet');
+    if(a&&a.textContent.trim())results.push({title:a.textContent.trim(),snippet:s?s.textContent.trim():'',src:'網頁搜尋'});
+  });
+  return results;
+}
 function shouldSearch(text){
-  if(searchMode==='always')return true;
-  if(searchMode==='never')return false;
-  return SEARCH_KEYWORDS.test(text);
+  if(searchMode==='always')return true;if(searchMode==='never')return false;return SEARCH_KW.test(text);
 }
 
 /* ===== 訊息顯示 ===== */
 function addMsg(role,text){
-  document.getElementById('welcome')?.remove();
-  const area=document.getElementById('chatArea');
-  const div=document.createElement('div');
-  div.className=`msg ${role}`;
-  if(role==='ai')div.innerHTML=`<div class="label">AI</div><span class="content"></span>`;
+  var w=document.getElementById('welcome');if(w)w.remove();
+  var area=document.getElementById('chatArea');var div=document.createElement('div');
+  div.className='msg '+role;
+  if(role==='ai')div.innerHTML='<div class="label">AI</div><span class="content"></span>';
   else div.textContent=text;
-  area.appendChild(div);
-  area.scrollTop=area.scrollHeight;
-  return div;
+  area.appendChild(div);area.scrollTop=area.scrollHeight;return div;
 }
 function addSystemMsg(text){
-  document.getElementById('welcome')?.remove();
-  const area=document.getElementById('chatArea');
-  const div=document.createElement('div');
-  div.className='msg system';
-  div.textContent=text;
-  area.appendChild(div);
-  area.scrollTop=area.scrollHeight;
+  var w=document.getElementById('welcome');if(w)w.remove();
+  var area=document.getElementById('chatArea');var div=document.createElement('div');
+  div.className='msg system';div.textContent=text;
+  area.appendChild(div);area.scrollTop=area.scrollHeight;
 }
 function addSearchCard(results){
-  const area=document.getElementById('chatArea');
-  const div=document.createElement('div');
+  var area=document.getElementById('chatArea');var div=document.createElement('div');
   div.className='search-card';
-  let html=`<div class="search-toggle" onclick="this.nextElementSibling.classList.toggle('open')">📰 找到 ${results.length} 筆搜尋結果（點擊展開）</div><div class="search-details">`;
-  results.forEach(r=>{html+=`<div class="search-item"><div class="s-title">${r.title}</div><div class="s-snip">${r.snippet}</div></div>`});
-  html+='</div>';
-  div.innerHTML=html;
-  area.appendChild(div);
-  area.scrollTop=area.scrollHeight;
+  var srcType=results[0]&&results[0].src==='即時摘要'?'📋 即時摘要':'📰 網頁搜尋';
+  var html='<div class="search-toggle" onclick="this.nextElementSibling.classList.toggle(\'open\')">'+srcType+' - 找到 '+results.length+' 筆結果（點擊展開）</div><div class="search-details">';
+  results.forEach(function(r){html+='<div class="search-item"><div class="s-title">'+r.title+'</div><div class="s-snip">'+r.snippet+'</div></div>'});
+  html+='</div>';div.innerHTML=html;area.appendChild(div);area.scrollTop=area.scrollHeight;
 }
 
-/* ===== 建構系統提示詞 ===== */
-function buildSystemPrompt(searchContext){
-  const aboutMe=localStorage.getItem('about_me')||'';
-  const style=localStorage.getItem('reply_style')||'用繁體中文、簡潔扼要、有條理';
-  let p='你是 AI 語音助手。\n';
-  if(aboutMe)p+=`\n使用者資訊：${aboutMe}\n`;
-  p+=`\n回覆風格：${style}\n`;
-  if(searchContext)p+=`\n以下是最新的網路搜尋結果，請根據這些結果回答使用者的問題，並在適當處標註資料來源。如果搜尋結果不足以回答，請誠實說明。\n\n${searchContext}\n`;
+/* ===== 系統提示詞 ===== */
+function buildSystemPrompt(searchCtx){
+  var aboutMe=localStorage.getItem('about_me')||'';
+  var style=localStorage.getItem('reply_style')||'用繁體中文、簡潔扼要、有條理';
+  var p='你是 AI 語音助手。\n';
+  if(aboutMe)p+='\n使用者資訊：'+aboutMe+'\n';
+  p+='\n回覆風格：'+style+'\n';
+  if(searchCtx)p+='\n以下是最新的網路搜尋結果，請根據這些結果回答使用者的問題，並在適當處標註資料來源。如果搜尋結果不足以回答，請誠實說明。\n\n'+searchCtx+'\n';
   return p;
 }
 
 /* ===== 送出訊息 ===== */
 async function sendMessage(){
-  const input=document.getElementById('userInput');
-  const text=input.value.trim();
-  if(!text)return;
-  const token=localStorage.getItem('pat_token');
+  var input=document.getElementById('userInput');var text=input.value.trim();if(!text)return;
+  var token=cleanToken(localStorage.getItem('pat_token'));
   if(!token){showSettings();return}
-  input.value='';
-  addMsg('user',text);
-  allMessages.push({role:'user',content:text});
+  input.value='';addMsg('user',text);allMessages.push({role:'user',content:text});
   chatHistory.push({role:'user',content:text});
   if(chatHistory.length>20)chatHistory=chatHistory.slice(-20);
-
-  /* 判斷是否搜尋 */
-  let searchCtx=null;
+  var searchCtx=null;
   if(shouldSearch(text)){
-    addSystemMsg(`🔍 正在搜尋「${text}」...`);
-    const res=await webSearch(text);
-    if(res&&res.length){
-      addSearchCard(res);
-      searchCtx=res.map((r,i)=>`[${i+1}] ${r.title}\n${r.snippet}`).join('\n\n');
-    }else{addSystemMsg('⚠️ 搜尋無結果，改用 AI 知識回答')}
+    addSystemMsg('🔍 正在搜尋「'+text+'」...');
+    var res=await webSearch(text);
+    if(res&&res.length){addSearchCard(res);searchCtx=res.map(function(r,i){return '['+(i+1)+'] '+r.title+'\n'+r.snippet}).join('\n\n')}
+    else{addSystemMsg('⚠️ 搜尋無結果，改用 AI 知識回答')}
   }
-
-  /* AI 回應 */
-  const aiDiv=addMsg('ai','');
-  const contentSpan=aiDiv.querySelector('.content');
-  contentSpan.innerHTML='<span class="typing-dot">●</span><span class="typing-dot" style="animation-delay:.2s">●</span><span class="typing-dot" style="animation-delay:.4s">●</span>';
-  const model=localStorage.getItem('model')||'gpt-4o-mini';
-  const temp=parseFloat(localStorage.getItem('temperature'))||0.7;
-  const sysPrompt=buildSystemPrompt(searchCtx);
-  const messages=[{role:'system',content:sysPrompt},...chatHistory];
-
+  var aiDiv=addMsg('ai','');var cs=aiDiv.querySelector('.content');
+  cs.innerHTML='<span class="typing-dot">●</span><span class="typing-dot" style="animation-delay:.2s">●</span><span class="typing-dot" style="animation-delay:.4s">●</span>';
+  var model=localStorage.getItem('model')||'gpt-4o-mini';
+  var temp=parseFloat(localStorage.getItem('temperature'))||0.7;
+  var msgs=[{role:'system',content:buildSystemPrompt(searchCtx)}].concat(chatHistory);
   try{
-    if(currentController)currentController.abort();
-    currentController=new AbortController();
-    const resp=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify({model,messages,stream:true,temperature:temp}),signal:currentController.signal});
-    if(!resp.ok){const s=resp.status;if(s===401)throw new Error('Token 無效，請到 ⚙️ 設定重新輸入');if(s===429)throw new Error('超過速率限制，請稍後再試');throw new Error(`API 錯誤 (${s})`)}
-    const reader=resp.body.getReader();
-    const decoder=new TextDecoder();
-    let fullText='',buffer='',sentBuf='';
-    contentSpan.textContent='';
+    if(currentController)currentController.abort();currentController=new AbortController();
+    var resp=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({model:model,messages:msgs,stream:true,temperature:temp}),signal:currentController.signal});
+    if(!resp.ok){var s=resp.status;if(s===401)throw new Error('Token 無效，請到 ⚙️ 設定重新輸入');if(s===429)throw new Error('超過速率限制，請稍後再試');throw new Error('API 錯誤 ('+s+')')}
+    var reader=resp.body.getReader();var decoder=new TextDecoder();
+    var fullText='',buffer='',sentBuf='';cs.textContent='';
     while(true){
-      const{done,value}=await reader.read();
-      if(done)break;
-      buffer+=decoder.decode(value,{stream:true});
-      const lines=buffer.split('\n');
-      buffer=lines.pop()||'';
-      for(const line of lines){
-        if(!line.startsWith('data: ')||line==='data: [DONE]')continue;
+      var chunk=await reader.read();if(chunk.done)break;
+      buffer+=decoder.decode(chunk.value,{stream:true});
+      var lines=buffer.split('\n');buffer=lines.pop()||'';
+      for(var li=0;li<lines.length;li++){
+        var line=lines[li];if(line.indexOf('data: ')!==0||line==='data: [DONE]')continue;
         try{
-          const j=JSON.parse(line.slice(6));
-          const d=j.choices?.[0]?.delta?.content;
-          if(d){
-            fullText+=d;
-            contentSpan.textContent=fullText;
-            document.getElementById('chatArea').scrollTop=document.getElementById('chatArea').scrollHeight;
-            if(voiceEnabled){
-              sentBuf+=d;
-              const m=sentBuf.match(/(.*[。！？\!\?\n])(.*)/s);
-              if(m){sentBuf=m[2];const u=new SpeechSynthesisUtterance(m[1].trim());u.lang='zh-TW';u.rate=speechRate;speechSynthesis.speak(u)}
-            }
+          var j=JSON.parse(line.substring(6));var d=j.choices&&j.choices[0]&&j.choices[0].delta&&j.choices[0].delta.content;
+          if(d){fullText+=d;cs.textContent=fullText;document.getElementById('chatArea').scrollTop=document.getElementById('chatArea').scrollHeight;
+            if(voiceEnabled){sentBuf+=d;var m=sentBuf.match(/(.*[。！？\!\?\n])(.*)/s);if(m){sentBuf=m[2];var u=new SpeechSynthesisUtterance(m[1].trim());u.lang='zh-TW';u.rate=speechRate;speechSynthesis.speak(u)}}
           }
         }catch(e){}
       }
     }
-    if(voiceEnabled&&sentBuf.trim()){const u=new SpeechSynthesisUtterance(sentBuf.trim());u.lang='zh-TW';u.rate=speechRate;speechSynthesis.speak(u)}
-    chatHistory.push({role:'assistant',content:fullText});
-    allMessages.push({role:'assistant',content:fullText});
-  }catch(err){
-    if(err.name==='AbortError')return;
-    contentSpan.textContent=`❌ ${err.message}`;
-    aiDiv.style.borderColor='#ef444460';
-  }
+    if(voiceEnabled&&sentBuf.trim()){var u2=new SpeechSynthesisUtterance(sentBuf.trim());u2.lang='zh-TW';u2.rate=speechRate;speechSynthesis.speak(u2)}
+    chatHistory.push({role:'assistant',content:fullText});allMessages.push({role:'assistant',content:fullText});
+  }catch(err){if(err.name==='AbortError')return;cs.textContent='❌ '+err.message;aiDiv.style.borderColor='#ef444460'}
 }
 </script>
 </body>
