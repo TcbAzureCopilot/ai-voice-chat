@@ -1,0 +1,22 @@
+{
+  "name": "AI 語音助手",
+  "short_name": "AI助手",
+  "description": "AI 語音聊天機器人 - 支援語音輸入與播放",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0f0f1a",
+  "theme_color": "#1a1a2e",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><rect width=\"100\" height=\"100\" rx=\"20\" fill=\"%231a1a2e\"/><text x=\"50\" y=\"68\" font-size=\"60\" text-anchor=\"middle\">🤖</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><rect width=\"100\" height=\"100\" rx=\"20\" fill=\"%231a1a2e\"/><text x=\"50\" y=\"68\" font-size=\"60\" text-anchor=\"middle\">🤖</text></svg>",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}

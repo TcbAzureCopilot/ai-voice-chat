@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1a1a2e">
+<title>AI 語音助手</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
+<style>
+/* ===== 全域樣式 ===== */
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #0f0f1a;
+  color: #e0e0e0;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ===== 頂部導航列 ===== */
+.header {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #ffffff15;
+  flex-shrink: 0;
+}
+.header h1 { font-size: 18px; background: linear-gradient(90deg, #a78bfa, #60a5fa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.header-btns { display: flex; gap: 8px; }
+.icon-btn {
+  background: #ffffff10;
+  border: 1px solid #ffffff20;
+  color: #e0e0e0;
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+.icon-btn:hover { background: #ffffff20; }
+.icon-btn.active { background: #a78bfa40; border-color: #a78bfa; color: #a78bfa; }
+
+/* ===== 聊天訊息區 ===== */
+.chat-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  scroll-behavior: smooth;
+}
+.msg {
+  max-width: 85%;
+  padding: 12px 16px;
+  border-radius: 18px;
+  line-height: 1.6;
+  font-size: 15px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  animation: fadeIn 0.3s ease;
+}
+@keyframes fadeIn { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: translateY(0); } }
+.msg.user {
+  align-self: flex-end;
+  background: linear-gradient(135deg, #7c3aed, #6366f1);
+  color: white;
+  border-bottom-right-radius: 6px;
+}
+.msg.ai {
+  align-self: flex-start;
+  background: #1e1e30;
+  border: 1px solid #ffffff15;
+  border-bottom-left-radius: 6px;
+}
+.msg.ai .label { font-size: 11px; color: #a78bfa; margin-bottom: 4px; }
+.msg.system { align-self: center; background: #ffffff08; color: #888; font-size: 13px; border-radius: 12px; }
+.typing-dot { display: inline-block; animation: blink 1.2s infinite; }
+@keyframes blink { 0%,100%{opacity:0.2} 50%{opacity:1} }
+
+/* ===== 輸入區 ===== */
+.input-area {
+  padding: 12px 16px;
+  background: #1a1a2e;
+  border-top: 1px solid #ffffff15;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.input-area input {
+  flex: 1;
+  background: #ffffff10;
+  border: 1px solid #ffffff20;
+  border-radius: 24px;
+  padding: 10px 16px;
+  color: white;
+  font-size: 15px;
+  outline: none;
+}
+.input-area input::placeholder { color: #666; }
+.input-area input:focus { border-color: #a78bfa60; }
+.send-btn {
+  background: linear-gradient(135deg, #7c3aed, #6366f1);
+  border: none; color: white;
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.mic-btn {
+  background: #ffffff10;
+  border: 2px solid #ffffff20;
+  color: #e0e0e0;
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+.mic-btn.recording { background: #ef444440; border-color: #ef4444; color: #ef4444; animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100%{box-shadow:0 0 0 0 #ef444440} 50%{box-shadow:0 0 0 8px #ef444400} }
+
+/* ===== 設定彈窗 ===== */
+.modal-overlay {
+  display: none;
+  position: fixed; top:0; left:0; right:0; bottom:0;
+  background: #00000080;
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background: #1e1e30;
+  border: 1px solid #ffffff15;
+  border-radius: 16px;
+  padding: 24px;
+  width: 100%;
+  max-width: 420px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.modal h2 { font-size: 18px; margin-bottom: 16px; color: #a78bfa; }
+.modal label { display: block; font-size: 13px; color: #aaa; margin-bottom: 4px; margin-top: 12px; }
+.modal input, .modal select, .modal textarea {
+  width: 100%;
+  background: #ffffff10;
+  border: 1px solid #ffffff20;
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: white;
+  font-size: 14px;
+  outline: none;
+}
+.modal textarea { height: 80px; resize: vertical; font-family: inherit; }
+.modal input:focus, .modal select:focus, .modal textarea:focus { border-color: #a78bfa60; }
+.modal select option { background: #1e1e30; }
+.modal-btns { display: flex; gap: 8px; margin-top: 20px; }
+.modal-btns button {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+}
+.btn-save { background: linear-gradient(135deg, #7c3aed, #6366f1); color: white; }
+.btn-cancel { background: #ffffff10; color: #ccc; border: 1px solid #ffffff20 !important; }
+
+/* ===== 歡迎畫面 ===== */
+.welcome {
+  text-align: center;
+  padding: 40px 20px;
+  color: #888;
+}
+.welcome .emoji { font-size: 64px; margin-bottom: 16px; }
+.welcome h2 { font-size: 20px; color: #a78bfa; margin-bottom: 12px; }
+.welcome p { font-size: 14px; line-height: 1.8; }
+.welcome .hint { margin-top: 16px; padding: 12px; background: #ffffff08; border-radius: 12px; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<!-- 頂部導航列 -->
+<div class="header">
+  <h1>🤖 AI 語音助手</h1>
+  <div class="header-btns">
+    <button class="icon-btn active" id="voiceToggle" onclick="toggleVoice()" title="語音播放">🔊</button>
+    <button class="icon-btn" onclick="showSettings()" title="設定">⚙️</button>
+  </div>
+</div>
+
+<!-- 聊天訊息區 -->
+<div class="chat-area" id="chatArea">
+  <div class="welcome" id="welcome">
+    <div class="emoji">🤖</div>
+    <h2>AI 語音助手</h2>
+    <p>你的智能語音聊天機器人</p>
+    <div class="hint">
+      👉 點右上角 ⚙️ 設定你的 Token<br>
+      🎙️ 按住麥克風按鈕說話<br>
+      ⌨️ 或直接打字送出<br>
+      🔊 點右上角切換語音播放
+    </div>
+  </div>
+</div>
+
+<!-- 輸入區 -->
+<div class="input-area">
+  <button class="mic-btn" id="micBtn" onclick="toggleMic()">🎙️</button>
+  <input type="text" id="userInput" placeholder="輸入訊息..." onkeydown="if(event.key==='Enter')sendMessage()">
+  <button class="send-btn" onclick="sendMessage()">➤</button>
+</div>
+
+<!-- 設定彈窗 -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal">
+    <h2>⚙️ 設定</h2>
+    <label>GitHub PAT Token *</label>
+    <input type="password" id="setToken" placeholder="github_pat_xxxxxxxxx...">
+    <label>AI 模型</label>
+    <select id="setModel">
+      <option value="gpt-4o-mini">GPT-4o Mini（速度快、省額度）</option>
+      <option value="gpt-4o">GPT-4o（更聰明）</option>
+      <option value="DeepSeek-R1">DeepSeek-R1（推理強）</option>
+    </select>
+    <label>系統提示詞</label>
+    <textarea id="setSystemPrompt">你是一個有用的 AI 助手，請用繁體中文回答。回答請簡潔扼要。</textarea>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="hideSettings()">取消</button>
+      <button class="btn-save" onclick="saveSettings()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =============================================================
+   全域變數與設定
+   ============================================================= */
+const API_URL = 'https://models.inference.ai.azure.com/chat/completions';
+let chatHistory = [];       // 對話紀錄（最多保留 10 輪）
+let voiceEnabled = true;    // 是否啟用語音播放
+let isRecording = false;    // 是否正在錄音
+let recognition = null;     // 語音辨識物件
+let currentController = null; // 用來中斷 fetch 的 controller
+
+/* =============================================================
+   初始化
+   ============================================================= */
+window.onload = () => {
+  // 如果還沒設定 Token，自動彈出設定視窗
+  if (!localStorage.getItem('pat_token')) {
+    setTimeout(showSettings, 500);
+  }
+  // 初始化語音辨識（Web Speech API）
+  initSpeechRecognition();
+  // 註冊 Service Worker（PWA 用）
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+};
+
+/* =============================================================
+   設定視窗
+   ============================================================= */
+function showSettings() {
+  document.getElementById('setToken').value = localStorage.getItem('pat_token') || '';
+  document.getElementById('setModel').value = localStorage.getItem('model') || 'gpt-4o-mini';
+  document.getElementById('setSystemPrompt').value = localStorage.getItem('system_prompt') || '你是一個有用的 AI 助手，請用繁體中文回答。回答請簡潔扼要。';
+  document.getElementById('settingsModal').classList.add('show');
+}
+function hideSettings() {
+  document.getElementById('settingsModal').classList.remove('show');
+}
+function saveSettings() {
+  const token = document.getElementById('setToken').value.trim();
+  if (!token) { alert('請輸入 PAT Token！'); return; }
+  localStorage.setItem('pat_token', token);
+  localStorage.setItem('model', document.getElementById('setModel').value);
+  localStorage.setItem('system_prompt', document.getElementById('setSystemPrompt').value);
+  hideSettings();
+  addSystemMsg('✅ 設定已儲存！開始聊天吧');
+}
+
+/* =============================================================
+   語音播放開關
+   ============================================================= */
+function toggleVoice() {
+  voiceEnabled = !voiceEnabled;
+  const btn = document.getElementById('voiceToggle');
+  btn.textContent = voiceEnabled ? '🔊' : '🔇';
+  btn.classList.toggle('active', voiceEnabled);
+  if (!voiceEnabled) speechSynthesis.cancel();
+}
+
+/* =============================================================
+   語音辨識（麥克風 → 文字）
+   ============================================================= */
+function initSpeechRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
+  recognition = new SR();
+  recognition.lang = 'zh-TW';
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.onresult = (e) => {
+    let text = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      text += e.results[i][0].transcript;
+    }
+    document.getElementById('userInput').value = text;
+    // 如果是最終結果，自動送出
+    if (e.results[e.results.length - 1].isFinal) {
+      setTimeout(() => sendMessage(), 300);
+    }
+  };
+  recognition.onend = () => {
+    isRecording = false;
+    document.getElementById('micBtn').classList.remove('recording');
+  };
+  recognition.onerror = (e) => {
+    isRecording = false;
+    document.getElementById('micBtn').classList.remove('recording');
+    if (e.error === 'not-allowed') addSystemMsg('⚠️ 請允許麥克風權限');
+  };
+}
+
+function toggleMic() {
+  if (!recognition) { addSystemMsg('⚠️ 你的瀏覽器不支援語音辨識'); return; }
+  if (isRecording) {
+    recognition.stop();
+  } else {
+    isRecording = true;
+    document.getElementById('micBtn').classList.add('recording');
+    document.getElementById('userInput').value = '';
+    recognition.start();
+  }
+}
+
+/* =============================================================
+   語音合成（文字 → 語音，逐句播放）
+   ============================================================= */
+function speakText(text) {
+  if (!voiceEnabled || !text.trim()) return;
+  speechSynthesis.cancel();
+  // 用句號、問號、驚嘆號、換行拆成句子
+  const sentences = text.split(/(?<=[。！？\!\?\n])/g).filter(s => s.trim());
+  let i = 0;
+  function speakNext() {
+    if (i >= sentences.length || !voiceEnabled) return;
+    const u = new SpeechSynthesisUtterance(sentences[i].trim());
+    u.lang = 'zh-TW';
+    u.rate = 1.1;
+    u.onend = () => { i++; speakNext(); };
+    speechSynthesis.speak(u);
+  }
+  speakNext();
+}
+
+/* =============================================================
+   訊息顯示
+   ============================================================= */
+function addMsg(role, text) {
+  document.getElementById('welcome')?.remove();
+  const area = document.getElementById('chatArea');
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  if (role === 'ai') div.innerHTML = `<div class="label">AI</div><span class="content"></span>`;
+  else div.textContent = text;
+  area.appendChild(div);
+  area.scrollTop = area.scrollHeight;
+  return div;
+}
+function addSystemMsg(text) {
+  document.getElementById('welcome')?.remove();
+  const area = document.getElementById('chatArea');
+  const div = document.createElement('div');
+  div.className = 'msg system';
+  div.textContent = text;
+  area.appendChild(div);
+  area.scrollTop = area.scrollHeight;
+}
+
+/* =============================================================
+   送出訊息 & 串流回應
+   ============================================================= */
+async function sendMessage() {
+  const input = document.getElementById('userInput');
+  const text = input.value.trim();
+  if (!text) return;
+
+  const token = localStorage.getItem('pat_token');
+  if (!token) { showSettings(); return; }
+
+  input.value = '';
+  addMsg('user', text);
+
+  // 維護對話紀錄（最多 10 輪 = 20 條）
+  chatHistory.push({ role: 'user', content: text });
+  if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
+
+  // 建立 AI 訊息泡泡
+  const aiDiv = addMsg('ai', '');
+  const contentSpan = aiDiv.querySelector('.content');
+  contentSpan.innerHTML = '<span class="typing-dot">●</span><span class="typing-dot" style="animation-delay:0.2s">●</span><span class="typing-dot" style="animation-delay:0.4s">●</span>';
+
+  // 準備 API 請求
+  const model = localStorage.getItem('model') || 'gpt-4o-mini';
+  const systemPrompt = localStorage.getItem('system_prompt') || '你是一個有用的 AI 助手，請用繁體中文回答。回答請簡潔扼要。';
+
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    ...chatHistory
+  ];
+
+  try {
+    // 中斷之前的請求
+    if (currentController) currentController.abort();
+    currentController = new AbortController();
+
+    const resp = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ model, messages, stream: true }),
+      signal: currentController.signal
+    });
+
+    // 錯誤處理
+    if (!resp.ok) {
+      const status = resp.status;
+      if (status === 401) throw new Error('Token 無效，請到 ⚙️ 設定重新輸入');
+      if (status === 429) throw new Error('超過速率限制，請稍後再試');
+      throw new Error(`API 錯誤 (${status})`);
+    }
+
+    // 串流讀取回應
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let fullText = '';
+    let buffer = '';
+    let sentenceBuffer = '';  // 用來蒐集完整句子再播放
+    contentSpan.textContent = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
+        try {
+          const json = JSON.parse(line.slice(6));
+          const delta = json.choices?.[0]?.delta?.content;
+          if (delta) {
+            fullText += delta;
+            contentSpan.textContent = fullText;
+            document.getElementById('chatArea').scrollTop = document.getElementById('chatArea').scrollHeight;
+
+            // 串流語音：蒐集到句子結尾就念
+            if (voiceEnabled) {
+              sentenceBuffer += delta;
+              const match = sentenceBuffer.match(/(.*[。！？\!\?\n])(.*)/s);
+              if (match) {
+                const toSpeak = match[1];
+                sentenceBuffer = match[2];
+                const u = new SpeechSynthesisUtterance(toSpeak.trim());
+                u.lang = 'zh-TW';
+                u.rate = 1.1;
+                speechSynthesis.speak(u);
+              }
+            }
+          }
+        } catch(e) {}
+      }
+    }
+
+    // 念剩餘的文字
+    if (voiceEnabled && sentenceBuffer.trim()) {
+      const u = new SpeechSynthesisUtterance(sentenceBuffer.trim());
+      u.lang = 'zh-TW';
+      u.rate = 1.1;
+      speechSynthesis.speak(u);
+    }
+
+    // 加入對話紀錄
+    chatHistory.push({ role: 'assistant', content: fullText });
+
+  } catch(err) {
+    if (err.name === 'AbortError') return;
+    contentSpan.textContent = `❌ ${err.message}`;
+    aiDiv.style.borderColor = '#ef444460';
+  }
+}
+</script>
+</body>
+</html>
